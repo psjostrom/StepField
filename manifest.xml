@@ -5,9 +5,7 @@
             <iq:product id="fr970"/>
         </iq:products>
         <iq:permissions/>
-        <iq:languages>
-            <iq:language>eng</iq:language>
-        </iq:languages>
+        <iq:languages/>
         <iq:barrels/>
     </iq:application>
 </iq:manifest>
