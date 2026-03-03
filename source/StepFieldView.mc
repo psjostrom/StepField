@@ -17,6 +17,12 @@ class StepFieldView extends WatchUi.DataField {
     hidden var mIsTimeBased as Boolean = true;
     hidden var mHasStep as Boolean = false;
 
+    // For tracking repeat iterations
+    hidden var mRepeatInfo as String = "";
+    hidden var mLastStepName as String = "";
+    hidden var mStepCounts as Dictionary<String, Number> = {};
+    hidden var mRepTotal as Number = 0;
+
     function initialize() {
         DataField.initialize();
     }
@@ -27,9 +33,21 @@ class StepFieldView extends WatchUi.DataField {
 
     function onTimerReset() as Void {
         mHasStep = false;
+        mStepCounts = {};
+        mRepTotal = 0;
+        mLastStepName = "";
     }
 
     function onWorkoutStepComplete() as Void {
+        // Track completed steps for repeat counting
+        if (mLastStepName.length() > 0) {
+            var count = mStepCounts.get(mLastStepName);
+            if (count == null) {
+                mStepCounts.put(mLastStepName, 1);
+            } else {
+                mStepCounts.put(mLastStepName, count + 1);
+            }
+        }
         captureStepStart();
     }
 
@@ -120,6 +138,21 @@ class StepFieldView extends WatchUi.DataField {
                 mStepName = intensityLabel(stepInfo.intensity);
             }
 
+            // Track for repeat counting
+            mLastStepName = mStepName;
+
+            // Check for repeat/interval info
+            mRepeatInfo = "";
+            if (step != null && step has :repetitionNumber && step.repetitionNumber != null) {
+                // WorkoutIntervalStep - repetitionNumber is total reps
+                mRepTotal = toNum(step.repetitionNumber);
+                if (mRepTotal > 1) {
+                    var completed = mStepCounts.get(mStepName);
+                    var current = (completed != null) ? completed + 1 : 1;
+                    mRepeatInfo = current + "/" + mRepTotal;
+                }
+            }
+
             // HR range
             if (step has :targetType && step has :targetValueLow && step has :targetValueHigh) {
                 var tt = toNum(step.targetType);
@@ -184,7 +217,11 @@ class StepFieldView extends WatchUi.DataField {
         var y = (h - totalH) / 2;
 
         dc.setColor(mColor, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, y, nameFont, mStepName, Graphics.TEXT_JUSTIFY_CENTER);
+        var displayName = mStepName;
+        if (mRepeatInfo.length() > 0) {
+            displayName = mStepName + " " + mRepeatInfo;
+        }
+        dc.drawText(cx, y, nameFont, displayName, Graphics.TEXT_JUSTIFY_CENTER);
         y += nameH + 2;
 
         if (mHrRange.length() > 0 && mRemaining.length() > 0) {
