@@ -152,7 +152,7 @@ class StepFieldView extends WatchUi.DataField {
                 mRemaining = "";
             }
 
-            mColor = intensityColor(stepInfo.intensity);
+            mColor = intensityColor(stepInfo.intensity, mStepName);
         } catch (ex instanceof Lang.Exception) {
             mHasStep = false;
         }
@@ -213,7 +213,10 @@ class StepFieldView extends WatchUi.DataField {
         return meters.toNumber() + "m";
     }
 
-    hidden function intensityColor(intensity) as Number {
+    hidden function intensityColor(intensity, name as String) as Number {
+        // Check step name first for semantic color
+        if (name.find("EASY") != null) { return 0x00CCFF; }
+
         var i = toNum(intensity);
         if (i == 2 || i == 3) { return 0x55FF55; }
         if (i == 1 || i == 4) { return 0x00CCFF; }
