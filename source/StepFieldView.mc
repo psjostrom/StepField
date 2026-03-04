@@ -1,4 +1,5 @@
 import Toybox.Activity;
+import Toybox.Communications;
 import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.WatchUi;
@@ -17,11 +18,10 @@ class StepFieldView extends WatchUi.DataField {
     hidden var mIsTimeBased as Boolean = true;
     hidden var mHasStep as Boolean = false;
 
-    // For tracking repeat iterations
-    hidden var mRepeatInfo as String = "";
-    hidden var mLastStepName as String = "";
-    hidden var mStepCounts as Dictionary<String, Number> = {};
-    hidden var mRepTotal as Number = 0;
+    // Rep tracking
+    hidden var mStepTotals as Dictionary = {};
+    hidden var mStepCounts as Dictionary = {};
+    hidden var mPrevStepName as String = "";
 
     function initialize() {
         DataField.initialize();
@@ -29,26 +29,49 @@ class StepFieldView extends WatchUi.DataField {
 
     function onTimerStart() as Void {
         captureStepStart();
+        fetchStepTotals();
+    }
+
+    function onTimerResume() as Void {
+        // Re-fetch if we don't have totals yet (e.g. first fetch failed)
+        if (mStepTotals.isEmpty()) {
+            fetchStepTotals();
+        }
     }
 
     function onTimerReset() as Void {
         mHasStep = false;
+        mStepTotals = {};
         mStepCounts = {};
-        mRepTotal = 0;
-        mLastStepName = "";
+        mPrevStepName = "";
     }
 
     function onWorkoutStepComplete() as Void {
-        // Track completed steps for repeat counting
-        if (mLastStepName.length() > 0) {
-            var count = mStepCounts.get(mLastStepName);
-            if (count == null) {
-                mStepCounts.put(mLastStepName, 1);
-            } else {
-                mStepCounts.put(mLastStepName, count + 1);
-            }
-        }
         captureStepStart();
+    }
+
+    hidden function fetchStepTotals() as Void {
+        var url = Secrets.SPRINGA_URL;
+        var secret = Secrets.SPRINGA_SECRET;
+        if (url.equals("") || secret.equals("")) { return; }
+
+        Communications.makeWebRequest(
+            url + "/api/workout-steps",
+            null,
+            {
+                :method => Communications.HTTP_REQUEST_METHOD_GET,
+                :headers => { "api-secret" => secret },
+                :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+            },
+            method(:onStepTotalsReceive)
+        );
+    }
+
+    function onStepTotalsReceive(responseCode as Number, data as Dictionary or String or Null) as Void {
+        if (responseCode != 200 || data == null || !(data instanceof Dictionary)) {
+            return;
+        }
+        mStepTotals = data as Dictionary;
     }
 
     hidden function toNum(val) as Number {
@@ -118,39 +141,38 @@ class StepFieldView extends WatchUi.DataField {
             mHasStep = true;
 
             // Step name: notes first (Garmin puts name there), then name, then intensity
-            mStepName = "";
+            var rawName = "";
             var step = stepInfo.step;
             try {
                 if (stepInfo has :notes && stepInfo.notes != null) {
                     var n = stepInfo.notes.toString();
-                    if (n.length() > 0) { mStepName = n.toUpper(); }
+                    if (n.length() > 0) { rawName = n.toUpper(); }
                 }
             } catch (ex2) {}
-            if (mStepName.length() == 0) {
+            if (rawName.length() == 0) {
                 try {
                     if (stepInfo has :name && stepInfo.name != null) {
                         var n = stepInfo.name.toString();
-                        if (n.length() > 0) { mStepName = n.toUpper(); }
+                        if (n.length() > 0) { rawName = n.toUpper(); }
                     }
                 } catch (ex3) {}
             }
-            if (mStepName.length() == 0) {
-                mStepName = intensityLabel(stepInfo.intensity);
+            if (rawName.length() == 0) {
+                rawName = intensityLabel(stepInfo.intensity);
             }
 
-            // Track for repeat counting
-            mLastStepName = mStepName;
+            // Track rep count on every name change (regardless of totals arrival)
+            if (!rawName.equals(mPrevStepName)) {
+                var count = mStepCounts.hasKey(rawName) ? (mStepCounts[rawName] as Number) + 1 : 1;
+                mStepCounts[rawName] = count;
+                mPrevStepName = rawName;
+            }
 
-            // Check for repeat/interval info
-            mRepeatInfo = "";
-            if (step != null && step has :repetitionNumber && step.repetitionNumber != null) {
-                // WorkoutIntervalStep - repetitionNumber is total reps
-                mRepTotal = toNum(step.repetitionNumber);
-                if (mRepTotal > 1) {
-                    var completed = mStepCounts.get(mStepName);
-                    var current = (completed != null) ? completed + 1 : 1;
-                    mRepeatInfo = current + "/" + mRepTotal;
-                }
+            // Build display name with rep info (only shown for steps in totals)
+            if (mStepTotals.hasKey(rawName) && mStepCounts.hasKey(rawName)) {
+                mStepName = rawName + " " + mStepCounts[rawName] + "/" + toNum(mStepTotals[rawName]);
+            } else {
+                mStepName = rawName;
             }
 
             // HR range
@@ -217,11 +239,7 @@ class StepFieldView extends WatchUi.DataField {
         var y = (h - totalH) / 2;
 
         dc.setColor(mColor, Graphics.COLOR_TRANSPARENT);
-        var displayName = mStepName;
-        if (mRepeatInfo.length() > 0) {
-            displayName = mStepName + " " + mRepeatInfo;
-        }
-        dc.drawText(cx, y, nameFont, displayName, Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx, y, nameFont, mStepName, Graphics.TEXT_JUSTIFY_CENTER);
         y += nameH + 2;
 
         if (mHrRange.length() > 0 && mRemaining.length() > 0) {
