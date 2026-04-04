@@ -17,7 +17,6 @@ class StepFieldView extends WatchUi.DataField {
     hidden var mIsTimeBased as Boolean = true;
     hidden var mHasStep as Boolean = false;
 
-
     function initialize() {
         DataField.initialize();
     }
