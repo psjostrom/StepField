@@ -6,7 +6,7 @@ import Toybox.WatchUi;
 class StepFieldView extends WatchUi.DataField {
 
     hidden var mStepName as String = "";
-    hidden var mHrRange as String = "";
+    hidden var mTargetRange as String = "";
     hidden var mRemaining as String = "";
     hidden var mColor as Number = 0xFFFFFF;
 
@@ -93,7 +93,7 @@ class StepFieldView extends WatchUi.DataField {
             if (stepInfo == null) {
                 mHasStep = false;
                 mStepName = "";
-                mHrRange = "";
+                mTargetRange = "";
                 mRemaining = "";
                 return;
             }
@@ -122,22 +122,33 @@ class StepFieldView extends WatchUi.DataField {
 
             mStepName = rawName;
 
-            // HR range
+            // Target range (HR or pace)
             if (step has :targetType && step has :targetValueLow && step has :targetValueHigh) {
                 var tt = toNum(step.targetType);
-                if (tt == 1) {
-                    var lo = step.targetValueLow;
-                    var hi = step.targetValueHigh;
-                    if (lo != null && hi != null) {
-                        mHrRange = (toNum(lo) - 100) + "-" + (toNum(hi) - 100);
+                var lo = step.targetValueLow;
+                var hi = step.targetValueHigh;
+                if (lo != null && hi != null) {
+                    if (tt == 0) {
+                        // Speed target: values in mm/s, convert to pace min:sec/km
+                        // High speed = fast pace, low speed = slow pace
+                        var loMms = toNum(lo);
+                        var hiMms = toNum(hi);
+                        if (loMms > 0 && hiMms > 0) {
+                            mTargetRange = formatPace(hiMms) + "-" + formatPace(loMms);
+                        } else {
+                            mTargetRange = "";
+                        }
+                    } else if (tt == 1) {
+                        // HR target: values are BPM + 100
+                        mTargetRange = (toNum(lo) - 100) + "-" + (toNum(hi) - 100);
                     } else {
-                        mHrRange = "";
+                        mTargetRange = "";
                     }
                 } else {
-                    mHrRange = "";
+                    mTargetRange = "";
                 }
             } else {
-                mHrRange = "";
+                mTargetRange = "";
             }
 
             // Remaining countdown (durationValue is seconds, timerTime is ms)
@@ -181,7 +192,7 @@ class StepFieldView extends WatchUi.DataField {
         var nameH = dc.getFontHeight(nameFont);
         var detailH = dc.getFontHeight(detailFont);
 
-        var hasDetails = (mHrRange.length() > 0 || mRemaining.length() > 0);
+        var hasDetails = (mTargetRange.length() > 0 || mRemaining.length() > 0);
         var totalH = hasDetails ? nameH + detailH + 2 : nameH;
         var y = (h - totalH) / 2;
 
@@ -189,13 +200,13 @@ class StepFieldView extends WatchUi.DataField {
         dc.drawText(cx, y, nameFont, mStepName, Graphics.TEXT_JUSTIFY_CENTER);
         y += nameH + 2;
 
-        if (mHrRange.length() > 0 && mRemaining.length() > 0) {
-            var detail = mHrRange + "  " + mRemaining;
+        if (mTargetRange.length() > 0 && mRemaining.length() > 0) {
+            var detail = mTargetRange + "  " + mRemaining;
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, y, detailFont, detail, Graphics.TEXT_JUSTIFY_CENTER);
-        } else if (mHrRange.length() > 0) {
+        } else if (mTargetRange.length() > 0) {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, y, detailFont, mHrRange, Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(cx, y, detailFont, mTargetRange, Graphics.TEXT_JUSTIFY_CENTER);
         } else if (mRemaining.length() > 0) {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, y, detailFont, mRemaining, Graphics.TEXT_JUSTIFY_CENTER);
@@ -205,6 +216,14 @@ class StepFieldView extends WatchUi.DataField {
     hidden function formatCountdown(seconds as Number) as String {
         var m = seconds / 60;
         var s = seconds % 60;
+        return m + ":" + s.format("%02d");
+    }
+
+    hidden function formatPace(mms as Number) as String {
+        // Convert mm/s to pace min:sec per km
+        var paceSeconds = 1000000 / mms;
+        var m = paceSeconds / 60;
+        var s = paceSeconds % 60;
         return m + ":" + s.format("%02d");
     }
 
