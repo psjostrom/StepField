@@ -129,12 +129,11 @@ class StepFieldView extends WatchUi.DataField {
                 var hi = step.targetValueHigh;
                 if (lo != null && hi != null) {
                     if (tt == 0) {
-                        // Speed target: values in mm/s, convert to pace min:sec/km
-                        // High speed = fast pace, low speed = slow pace
-                        var loMms = toNum(lo);
-                        var hiMms = toNum(hi);
-                        if (loMms > 0 && hiMms > 0) {
-                            mTargetRange = formatPace(hiMms) + "-" + formatPace(loMms);
+                        // Speed target: values in m/s (Float), convert to pace min:sec/km
+                        var loSpd = toFlt(lo);
+                        var hiSpd = toFlt(hi);
+                        if (loSpd > 0.0f && hiSpd > 0.0f) {
+                            mTargetRange = formatPace(hiSpd) + "-" + formatPace(loSpd);
                         } else {
                             mTargetRange = "";
                         }
@@ -219,9 +218,8 @@ class StepFieldView extends WatchUi.DataField {
         return m + ":" + s.format("%02d");
     }
 
-    hidden function formatPace(mms as Number) as String {
-        // Convert mm/s to pace min:sec per km
-        var paceSeconds = 1000000 / mms;
+    hidden function formatPace(speedMs as Float) as String {
+        var paceSeconds = (1000.0f / speedMs).toNumber();
         var m = paceSeconds / 60;
         var s = paceSeconds % 60;
         return m + ":" + s.format("%02d");
